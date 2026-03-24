@@ -1,17 +1,6 @@
 # app.py
 
 import streamlit as st
-import pandas as pd
-import joblib
-
-# =========================
-# LOAD MODEL (Pipeline)
-# =========================
-@st.cache_resource
-def load_model():
-    return joblib.load("model_hotel_booking.pkl")
-
-model = load_model()
 
 # =========================
 # PAGE CONFIG
@@ -22,32 +11,62 @@ st.set_page_config(
     page_icon="🏨"
 )
 
-st.title("🏨 Hotel Booking Cancellation Prediction")
-st.markdown("Predict the likelihood of booking cancellation and support business decision-making")
+import pandas as pd
+import joblib
 
 # =========================
-# SIDEBAR INPUT
+# LOAD MODEL
 # =========================
-st.sidebar.header("🔧 Input Booking Data")
+@st.cache_resource
+def load_model():
+    return joblib.load("model_hotel_booking.pkl")
+
+model = load_model()
+
+# ambil kolom model (penting untuk get_dummies)
+model_columns = model.feature_names_in_
+
+# =========================
+# PREPROCESS FUNCTION
+# =========================
+def preprocess_input(df_input):
+    df_encoded = pd.get_dummies(df_input)
+
+    for col in model_columns:
+        if col not in df_encoded.columns:
+            df_encoded[col] = 0
+
+    df_encoded = df_encoded[model_columns]
+    return df_encoded
+
+# =========================
+# HEADER
+# =========================
+st.title("🏨 Hotel Booking Cancellation Prediction")
+st.markdown("### Decision Support System for Revenue Optimization")
+
+# =========================
+# SIDEBAR
+# =========================
+st.sidebar.header("🔧 Booking Input")
 
 lead_time = st.sidebar.number_input("Lead Time", 0, 500, 50)
 previous_cancellations = st.sidebar.number_input("Previous Cancellations", 0, 10, 0)
 booking_changes = st.sidebar.number_input("Booking Changes", 0, 10, 0)
 
-deposit_type = st.sidebar.selectbox(
-    "Deposit Type",
-    ["No Deposit", "Non Refund", "Refundable"]
-)
+deposit_type = st.sidebar.selectbox("Deposit Type",
+    ["No Deposit", "Non Refund", "Refundable"])
 
-market_segment = st.sidebar.selectbox(
-    "Market Segment",
-    ["Online TA", "Offline TA/TO", "Direct", "Corporate"]
-)
+market_segment = st.sidebar.selectbox("Market Segment",
+    ["Online TA", "Offline TA/TO", "Direct", "Corporate"])
 
-customer_type = st.sidebar.selectbox(
-    "Customer Type",
-    ["Transient", "Contract", "Group", "Transient-Party"]
-)
+customer_type = st.sidebar.selectbox("Customer Type",
+    ["Transient", "Contract", "Group", "Transient-Party"])
+
+st.sidebar.markdown("---")
+st.sidebar.markdown("## 📌 Model Info")
+st.sidebar.write("Model: Random Forest")
+st.sidebar.write("Encoding: pd.get_dummies")
 
 # =========================
 # SINGLE PREDICTION
@@ -56,7 +75,7 @@ st.subheader("🔍 Single Prediction")
 
 if st.sidebar.button("🚀 Predict"):
 
-    input_data = pd.DataFrame({
+    input_df = pd.DataFrame({
         "lead_time": [lead_time],
         "previous_cancellations": [previous_cancellations],
         "booking_changes": [booking_changes],
@@ -66,93 +85,154 @@ if st.sidebar.button("🚀 Predict"):
     })
 
     try:
-        prediction = model.predict(input_data)[0]
-        prob = model.predict_proba(input_data)[0][1]
+        processed = preprocess_input(input_df)
+
+        pred = model.predict(processed)[0]
+        prob = model.predict_proba(processed)[0][1]
 
         col1, col2, col3 = st.columns(3)
 
-        with col1:
-            st.metric("Prediction", "Cancel" if prediction == 1 else "Not Cancel")
+        col1.metric("Prediction", "Cancel" if pred else "Not Cancel")
+        col2.metric("Probability", f"{prob:.2%}")
+        col3.metric("Risk Level",
+            "High" if prob > 0.7 else "Medium" if prob > 0.4 else "Low")
 
-        with col2:
-            st.metric("Probability", f"{prob:.2%}")
+        st.progress(prob)
 
-        with col3:
-            st.metric("Risk Level", 
-                      "High" if prob > 0.7 else "Medium" if prob > 0.4 else "Low")
-
-        st.progress(float(min(max(prob, 0), 1)))
-
-        # =========================
-        # DECISION SUPPORT
-        # =========================
-        st.subheader("💡 Business Recommendation")
+        st.subheader("💡 Recommendation")
 
         if prob > 0.7:
-            st.error("⚠️ High Risk → Require Deposit or Prepayment")
+            st.error("High Risk → Require Deposit / Prepayment")
         elif prob > 0.4:
-            st.warning("⚠️ Medium Risk → Send Reminder / Offer Incentive")
+            st.warning("Medium Risk → Send Reminder / Offer Incentive")
         else:
-            st.success("✅ Low Risk → No Action Needed")
+            st.success("Low Risk → No Action Needed")
 
     except Exception as e:
-        st.error(f"❌ Error: {e}")
+        st.error(f"Error: {e}")
 
 # =========================
 # BATCH PREDICTION
 # =========================
-st.subheader("📂 Batch Prediction (Upload CSV)")
+st.subheader("📂 Batch Prediction")
 
-uploaded_file = st.file_uploader("Upload CSV", type=["csv"])
+# =========================
+# SAMPLE CSV DOWNLOAD
+# =========================
+st.markdown("### 📥 Download Sample CSV")
 
-if uploaded_file is not None:
-    df = pd.read_csv(uploaded_file)
+sample_df = pd.DataFrame({
+    "lead_time": [50],
+    "previous_cancellations": [0],
+    "booking_changes": [1],
+    "deposit_type": ["No Deposit"],
+    "market_segment": ["Online TA"],
+    "customer_type": ["Transient"]
+})
 
-    st.write("Preview Data:")
+st.download_button(
+    label="Download Sample CSV",
+    data=sample_df.to_csv(index=False),
+    file_name="sample_hotel_booking.csv",
+    mime="text/csv"
+)
+
+st.markdown("Upload file dengan format yang sama seperti sample di atas 👇")
+
+# =========================
+# UPLOAD
+# =========================
+file = st.file_uploader("Upload CSV", type=["csv"])
+
+if file is not None:
+
+    df = pd.read_csv(file)
+
+    st.write("Preview Data")
     st.dataframe(df.head())
 
-    expected_columns = [
+    required_cols = [
         "lead_time", "previous_cancellations", "booking_changes",
         "deposit_type", "market_segment", "customer_type"
     ]
 
-    if not all(col in df.columns for col in expected_columns):
-        st.error("❌ CSV format tidak sesuai. Pastikan kolom sesuai dengan input model.")
-    else:
-        try:
-            predictions = model.predict(df)
-            probabilities = model.predict_proba(df)[:, 1]
+    # isi kolom missing
+    for col in required_cols:
+        if col not in df.columns:
+            if col in ["lead_time", "previous_cancellations", "booking_changes"]:
+                df[col] = 0
+            else:
+                df[col] = "Unknown"
 
-            df["Prediction"] = predictions
-            df["Probability"] = probabilities
-            df["Risk Level"] = df["Probability"].apply(
-                lambda x: "High" if x > 0.7 else "Medium" if x > 0.4 else "Low"
-            )
+    df_model = df[required_cols]
 
-            st.write("✅ Prediction Result:")
-            st.dataframe(df)
+    try:
+        processed = preprocess_input(df_model)
 
-            # =========================
-            # VISUALIZATION
-            # =========================
-            st.subheader("📊 Prediction Distribution")
-            st.bar_chart(df["Risk Level"].value_counts())
+        pred = model.predict(processed)
+        prob = model.predict_proba(processed)[:, 1]
 
-            # =========================
-            # DOWNLOAD
-            # =========================
-            st.download_button(
-                label="📥 Download Result",
-                data=df.to_csv(index=False),
-                file_name="prediction_result.csv",
-                mime="text/csv"
-            )
+        df["Prediction"] = pred
+        df["Probability"] = prob
+        df["Risk Level"] = df["Probability"].apply(
+            lambda x: "High" if x > 0.7 else "Medium" if x > 0.4 else "Low"
+        )
 
-        except Exception as e:
-            st.error(f"❌ Error saat prediksi: {e}")
+        st.success(f"Prediction success! {len(df)} records processed")
+
+        # =========================
+        # KPI
+        # =========================
+        st.subheader("📊 Business Summary")
+
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Total Booking", len(df))
+        c2.metric("High Risk", (df["Risk Level"] == "High").sum())
+        c3.metric("Avg Probability", f"{df['Probability'].mean():.2%}")
+
+        # =========================
+        # BUSINESS IMPACT
+        # =========================
+        st.subheader("💰 Business Impact")
+
+        avg_revenue = 100
+        loss = df["Probability"].sum() * avg_revenue
+
+        st.metric("Estimated Revenue at Risk", f"${loss:,.0f}")
+
+        # =========================
+        # VISUALIZATION
+        # =========================
+        st.subheader("📊 Risk Distribution")
+        st.bar_chart(df["Risk Level"].value_counts())
+
+        # =========================
+        # INSIGHT
+        # =========================
+        st.subheader("🧠 Key Insights")
+
+        high = (df["Risk Level"] == "High").sum()
+
+        st.write(f"""
+        - {high} bookings memiliki risiko tinggi
+        - Model membantu deteksi cancel lebih awal
+        - Intervensi seperti deposit bisa mengurangi risiko
+        """)
+
+        # =========================
+        # DOWNLOAD
+        # =========================
+        st.download_button(
+            "📥 Download Result",
+            df.to_csv(index=False),
+            "prediction.csv"
+        )
+
+    except Exception as e:
+        st.error(f"Prediction error: {e}")
 
 # =========================
 # FOOTER
 # =========================
 st.markdown("---")
-st.caption("Developed for Hotel Revenue Optimization using Machine Learning")
+st.caption("Built for Decision Support System (DSS) - Hotel Revenue Optimization")
