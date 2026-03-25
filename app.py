@@ -22,7 +22,7 @@ import joblib
 
 @st.cache_resource
 def load_model():
-    with lzma.open("model_hotel_booking.xz", "rb") as f:
+    with lzma.open("model_hotel_booking1.xz", "rb") as f:
         return joblib.load(f)
 
 model = load_model()
