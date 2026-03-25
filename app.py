@@ -28,7 +28,22 @@ def load_model():
 model = load_model()
 
 # ambil kolom model (penting untuk get_dummies)
-model_columns = model.feature_names_in_
+model_columns = [
+    "lead_time",
+    "previous_cancellations",
+    "booking_changes",
+    "deposit_type_No Deposit",
+    "deposit_type_Non Refund",
+    "deposit_type_Refundable",
+    "market_segment_Online TA",
+    "market_segment_Offline TA/TO",
+    "market_segment_Direct",
+    "market_segment_Corporate",
+    "customer_type_Transient",
+    "customer_type_Contract",
+    "customer_type_Group",
+    "customer_type_Transient-Party"
+]
 
 # =========================
 # PREPROCESS FUNCTION
