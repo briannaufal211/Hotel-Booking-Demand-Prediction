@@ -17,9 +17,13 @@ import joblib
 # =========================
 # LOAD MODEL
 # =========================
+import lzma
+import joblib
+
 @st.cache_resource
 def load_model():
-    return joblib.load("model_hotel_booking.pkl")
+    with lzma.open("model_hotel_booking.xz", "rb") as f:
+        return joblib.load(f)
 
 model = load_model()
 
